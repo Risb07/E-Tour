@@ -1,11 +1,9 @@
-HELP.md
-
 # Maven
 target/
 !**/src/main/**/target/
 !**/src/test/**/target/
 
-# STS / Eclipse
+# Eclipse / STS
 .apt_generated
 .classpath
 .factorypath
@@ -14,11 +12,14 @@ target/
 .springBeans
 .sts4-cache
 
-# IntelliJ IDEA
+# IntelliJ
 .idea/
-*.iws
 *.iml
 *.ipr
+*.iws
+
+# VS Code
+.vscode/
 
 # NetBeans
 /nbproject/private/
@@ -30,12 +31,18 @@ build/
 !**/src/main/**/build/
 !**/src/test/**/build/
 
-# VS Code
-.vscode/
-
 # Logs
 *.log
 
 # Environment
 .env
 .env.*
+
+# Spring Boot local configuration
+src/main/resources/application.properties
+
+# Optional
+HELP.md
+
+# Spring Boot local configuration
+src/main/resources/application.properties
