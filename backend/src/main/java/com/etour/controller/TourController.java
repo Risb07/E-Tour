@@ -1,0 +1,54 @@
+package com.etour.controller;
+
+import java.util.List;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import com.etour.entity.Tour;
+import com.etour.service.TourService;
+
+@RestController
+@RequestMapping("/api/tours")
+public class TourController {
+
+    @Autowired
+    private TourService service;
+
+    @GetMapping("/test")
+    public ResponseEntity<String> test() {
+        return ResponseEntity.ok("Controller Working");
+    }
+
+    @PostMapping
+    public ResponseEntity<Tour> createTour(@RequestBody Tour tour) {
+        Tour createdTour = service.createTour(tour);
+        return ResponseEntity.status(HttpStatus.CREATED).body(createdTour);
+    }
+
+    @GetMapping("/{id}")
+    public ResponseEntity<Tour> getTour(@PathVariable Long id) {
+        Tour tour = service.getTour(id);
+        return ResponseEntity.ok(tour);
+    }
+
+    @GetMapping
+    public ResponseEntity<List<Tour>> getAllTours() {
+        List<Tour> tours = service.getAllTours();
+        return ResponseEntity.ok(tours);
+    }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<Tour> updateTour(@PathVariable Long id, @RequestBody Tour tour) {
+        Tour updatedTour = service.updateTour(id, tour);
+        return ResponseEntity.ok(updatedTour);
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<String> deleteTour(@PathVariable Long id) {
+        service.deleteTour(id);
+        return ResponseEntity.ok("Tour deleted successfully");
+    }
+}
