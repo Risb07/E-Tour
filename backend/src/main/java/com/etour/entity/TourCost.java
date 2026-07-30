@@ -13,8 +13,9 @@ public class TourCost {
       @Column(name = "cost_id")
       private Long costId;
 
-      @Column(name = "tour_id", nullable = false)
-      private Long tourId;
+      @ManyToOne
+      @JoinColumn(name = "tour_id")
+      private Tour tour;
 
       @Column(name = "base_price", nullable = false, precision = 12, scale = 2)
       private BigDecimal basePrice;
@@ -45,12 +46,17 @@ public class TourCost {
       }
 
       // Constructor with all fields
-      public TourCost(Long costId, Long tourId, BigDecimal basePrice,
-                  BigDecimal singlePersonCost, BigDecimal extraPersonCost,
-                  BigDecimal childWithBedCost, BigDecimal childWithoutBedCost,
-                  LocalDate validFrom, LocalDate validTo, Integer status) {
+      public TourCost(Long costId, Tour tour, BigDecimal basePrice,
+                  BigDecimal singlePersonCost,
+                  BigDecimal extraPersonCost,
+                  BigDecimal childWithBedCost,
+                  BigDecimal childWithoutBedCost,
+                  LocalDate validFrom,
+                  LocalDate validTo,
+                  Integer status) {
+
             this.costId = costId;
-            this.tourId = tourId;
+            this.tour = tour;
             this.basePrice = basePrice;
             this.singlePersonCost = singlePersonCost;
             this.extraPersonCost = extraPersonCost;
@@ -70,12 +76,12 @@ public class TourCost {
             this.costId = costId;
       }
 
-      public Long getTourId() {
-            return tourId;
+      public Tour getTour() {
+            return tour;
       }
 
-      public void setTourId(Long tourId) {
-            this.tourId = tourId;
+      public void setTour(Tour tour) {
+            this.tour = tour;
       }
 
       public BigDecimal getBasePrice() {
@@ -147,7 +153,7 @@ public class TourCost {
       public String toString() {
             return "TourCost{" +
                         "costId=" + costId +
-                        ", tourId=" + tourId +
+                        ", tourId=" + (tour != null ? tour.getTourId() : null) +
                         ", basePrice=" + basePrice +
                         ", singlePersonCost=" + singlePersonCost +
                         ", extraPersonCost=" + extraPersonCost +
