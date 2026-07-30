@@ -1,7 +1,9 @@
 package com.etour.entity;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 import com.etour.enums.TourCode;
@@ -18,12 +20,16 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.JoinTable;
 import jakarta.persistence.ManyToMany;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.CascadeType;
 import jakarta.persistence.Table;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
+
+import com.etour.entity.Category;
 
 @Entity
 @Table(name = "tour")
@@ -63,17 +69,16 @@ public class Tour {
     private TourStatus status = TourStatus.DRAFT;
 
     @ManyToMany
-    @JoinTable(
-        name = "tour_category",
-        joinColumns = @JoinColumn(name = "tour_id"),
-        inverseJoinColumns = @JoinColumn(name = "category_id")
-    )
+    @JoinTable(name = "tour_category", joinColumns = @JoinColumn(name = "tour_id"), inverseJoinColumns = @JoinColumn(name = "category_id"))
     @JsonIgnoreProperties({
-        "parentCategory",
-        "hibernateLazyInitializer",
-        "handler"
+            "parentCategory",
+            "hibernateLazyInitializer",
+            "handler"
     })
     private Set<Category> categories = new HashSet<>();
+
+    @OneToMany(mappedBy = "tour", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<TourCost> tourCosts = new ArrayList<>();
 
     public Tour() {
     }

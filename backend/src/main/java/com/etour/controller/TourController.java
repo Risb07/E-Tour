@@ -6,9 +6,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
 import com.etour.entity.Tour;
 import com.etour.service.TourService;
+import com.etour.dto.response.TourDetailsResponse;;
 
 @RestController
 @RequestMapping("/api/tours")
@@ -40,6 +40,20 @@ public class TourController {
         return ResponseEntity.ok(tours);
     }
 
+    @GetMapping("/code/{code}")
+    public ResponseEntity<List<Tour>> getToursByCode(@PathVariable String code) {
+        List<Tour> tours = service.getTourByTourCode(code);
+        return ResponseEntity.ok(tours);
+    }
+    /* Get all Tour details */
+
+    @GetMapping("/{id}/details")
+    public ResponseEntity<TourDetailsResponse> getTourDetails(
+            @PathVariable Long id) {
+
+        return ResponseEntity.ok(
+                service.getTourDetails(id));
+    }
     @PutMapping("/{id}")
     public ResponseEntity<Tour> updateTour(@PathVariable Long id, @RequestBody Tour tour) {
         Tour updatedTour = service.updateTour(id, tour);

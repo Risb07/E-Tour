@@ -24,7 +24,6 @@ public class CategoryController {
         this.categoryService = categoryService;
     }
 
-    @PreAuthorize("hasRole('ADMIN')")
     @PostMapping
     public ResponseEntity<Category> createCategory(
             @Valid @RequestBody Category category) {
