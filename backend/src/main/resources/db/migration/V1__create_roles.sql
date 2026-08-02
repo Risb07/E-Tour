@@ -1,0 +1,10 @@
+CREATE TABLE roles
+(
+    role_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+
+    role_name VARCHAR(100) NOT NULL UNIQUE,
+
+    description TEXT,
+
+    status BOOLEAN NOT NULL DEFAULT TRUE
+);
