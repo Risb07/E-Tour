@@ -1,0 +1,73 @@
+spring:
+  application:
+    name: etour-notification-service
+
+  datasource:
+    # This service's OWN database - a separate schema with its own user, on the
+    # same MySQL server as eTour. Nothing else reads or writes these tables.
+    # The default below is for running this service outside Docker against a
+    # local MySQL; compose overrides it with NOTIFY_DB_URL.
+    url: ${NOTIFY_DB_URL:jdbc:mysql://localhost:3306/etour_notify?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC}
+    username: ${NOTIFY_DB_USERNAME:notify}
+    password: ${NOTIFY_DB_PASSWORD:notifypassword}
+
+  jpa:
+    hibernate:
+      # The service owns this schema outright, so it is free to manage it.
+      ddl-auto: update
+    open-in-view: false
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+
+  mail:
+    host: ${MAIL_HOST:smtp.gmail.com}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+        # Without these a dead SMTP host hangs the worker thread until the OS
+        # gives up, which can be minutes. Failing fast is what lets the single
+        # retry actually happen in a useful timeframe.
+        connectiontimeout: 5000
+        timeout: 5000
+        writetimeout: 5000
+
+server:
+  port: ${SERVER_PORT:8085}
+
+notify:
+  # Initial send + exactly ONE retry, then dead-letter.
+  max-attempts: ${NOTIFY_MAX_ATTEMPTS:2}
+  retry-delay-seconds: ${NOTIFY_RETRY_DELAY_SECONDS:30}
+  batch-size: ${NOTIFY_BATCH_SIZE:25}
+  # Blank => auto-detect from whether mail credentials exist.
+  transport: ${NOTIFY_TRANSPORT:}
+  from: ${MAIL_FROM:noreply@etour.example.com}
+  worker:
+    # How often the queue is polled for due messages.
+    poll-interval-ms: ${NOTIFY_POLL_INTERVAL_MS:5000}
+
+security:
+  jwt:
+    # The SAME secret both eTour backends sign with, so a token minted by
+    # either verifies here. Blank => every authenticated route returns 401,
+    # which is the safe default (it fails closed, not open).
+    secret: ${JWT_SECRET:}
+  # Admin role is resolved by asking whichever backend is live, because the
+  # eTour JWT carries only the subject and no role claim.
+  backend:
+    base-url: ${BACKEND_BASE_URL:http://backend:8080}
+    admin-probe-path: ${BACKEND_ADMIN_PROBE_PATH:/api/admin/dashboard}
+    timeout-ms: ${BACKEND_TIMEOUT_MS:4000}
+    cache-ttl-seconds: ${BACKEND_CACHE_TTL_SECONDS:60}
+
+logging:
+  level:
+    com.etour.notification: ${LOG_LEVEL:INFO}

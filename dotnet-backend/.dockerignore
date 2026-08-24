@@ -1,0 +1,37 @@
+# Keep the build context small and the image clean.
+
+# Build output - the image compiles from source in its own stage, and host-built
+# binaries would otherwise be copied in and shadow it. These are also the two
+# directories most likely to contain Windows-specific artefacts that will not
+# run in the Linux build stage.
+**/bin/
+**/obj/
+
+# Visual Studio / Rider local state
+.vs/
+.idea/
+*.user
+*.suo
+
+# Local secrets must never end up in an image layer. appsettings.json itself is
+# committed and safe (all credentials blank); Development overrides are not.
+**/appsettings.Development.json
+**/appsettings.Local.json
+.env
+.env.*
+!.env.example
+
+# Runtime output: these belong in mounted volumes, not the image.
+**/logs/
+**/uploads/
+
+# Tests are not published into the runtime image.
+tests/
+
+# Docs and tooling
+*.md
+tools/
+Dockerfile
+.dockerignore
+.git/
+.gitignore

@@ -1,0 +1,25 @@
+# Keep the build context small and the image clean.
+
+# Build output - the image compiles from source in its own stage, and a
+# host-built target/ would otherwise be copied in and shadow it.
+target/
+
+# Local secrets must never end up in an image layer.
+.env
+.env.*
+!.env.example
+*.pem
+*.p12
+*.jks
+
+# IDE / OS / docs
+.idea/
+*.iml
+.vscode/
+.settings/
+.classpath
+.project
+.DS_Store
+Thumbs.db
+*.log
+*.md

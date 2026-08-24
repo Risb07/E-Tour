@@ -1,0 +1,139 @@
+# Compose secrets. The stack reads .env at the project root; only the example
+# belongs in version control.
+.env
+.env.*
+!.env.example
+
+# Runtime uploads (tour media, Excel batches) - bind-mounted into the backend
+# container. Keep the folder, ignore its contents.
+uploads/*
+!uploads/.gitkeep
+
+# OS
+.DS_Store
+Thumbs.db
+
+.claude
+
+.env
+.env.*
+!.env.example
+
+.claude/
+
+node_modules/
+bin/
+obj/
+
+uploads/*
+!uploads/.gitkeep
+
+.vscode/
+.idea/
+
+*.log
+
+# =========================
+# Secrets
+# =========================
+.env
+.env.*
+!.env.example
+
+# =========================
+# AI / Assistant metadata
+# =========================
+.claude/
+
+# =========================
+# Node.js
+# =========================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-store/
+
+# Frontend builds
+dist/
+build/
+.next/
+.nuxt/
+
+# =========================
+# .NET
+# =========================
+bin/
+obj/
+.vs/
+
+# =========================
+# Java
+# =========================
+target/
+*.class
+
+# =========================
+# Docker local overrides
+# =========================
+docker-compose.local.yml
+
+# =========================
+# Runtime uploads
+# =========================
+uploads/*
+!uploads/.gitkeep
+
+# =========================
+# IDE
+# =========================
+.vscode/
+.idea/
+
+# =========================
+# OS
+# =========================
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# =========================
+# Logs
+# =========================
+*.log
+logs/
+
+# =========================
+# Temporary files
+# =========================
+tmp/
+temp/
+*.tmp
+
+# =========================
+# Interview cleanup docs
+# =========================
+HANDOVER_CHANGES.md
+PROJECT_CHANGES.md
+PHASE2_BRD_FEATURES.md
+MULTIPATH_AUTOMATION.md
+BACKEND_SWITCHING.md
+CATEGORY_AND_MEDIA_FIXES.md
+FRONTEND_DB_DRIVEN.md
+REMAINING_WORK.md
+ROOM_CHARGES_AND_NAV_FIXES.md
+SECURITY_FIXES.md
+UI_OPTIMIZATION.md
+
+# Generated / internal docs
+eTour_Interview_Preparation.pdf
+eTour_Application_Documentation.pdf
+eTour_Complete_Project_Documentation.pdf
+eTour_Database_Documentation.pdf
+eTour_Docker_Guide.pdf
+eTour_Notification_Microservice_Guide.pdf
+eTour_Technical_Documentation.pdf
+
+# Business docs
+VITA - BRD - eTour v1.3.doc
+VITA - BRD - eTour v1.3.pdf

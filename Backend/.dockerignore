@@ -1,0 +1,33 @@
+# Keep the build context small and the image clean.
+# Anything listed here is never sent to the Docker daemon.
+
+# Build output - the image compiles from source in its own stage, and a
+# host-built target/ would otherwise be copied in and shadow it.
+target/
+
+# Local secrets must never end up in an image layer.
+.env
+.env.*
+!.env.example
+*.pem
+*.p12
+*.jks
+
+# Runtime uploads: these belong in the bind-mounted volume, not the image.
+uploads/
+
+# The SQL dump is mounted into MySQL by compose; the backend image has no use
+# for it.
+db/
+
+# IDE / OS / docs
+.idea/
+*.iml
+.vscode/
+.settings/
+.classpath
+.project
+.DS_Store
+Thumbs.db
+*.log
+*.md

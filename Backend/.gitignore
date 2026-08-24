@@ -1,0 +1,29 @@
+# Secrets - never commit these
+.env
+.env.*
+!.env.example
+*.pem
+*.p12
+*.jks
+
+# Build output
+target/
+!.mvn/wrapper/maven-wrapper.jar
+
+# Runtime uploads (tour media, Excel batches)
+uploads/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.settings/
+.classpath
+.project
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

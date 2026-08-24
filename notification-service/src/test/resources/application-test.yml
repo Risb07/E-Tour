@@ -1,0 +1,41 @@
+# Tests run against in-memory H2 in MySQL compatibility mode, so `mvn test`
+# needs nothing running. The one thing H2 cannot do is FOR UPDATE SKIP LOCKED,
+# so tests exercise NotificationDispatcher directly rather than through the
+# claim query - the retry policy is what they are pinning, not the SQL dialect.
+spring:
+  datasource:
+    url: jdbc:h2:mem:notifytest;MODE=MySQL;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    database-platform: org.hibernate.dialect.H2Dialect
+  mail:
+    host: localhost
+    port: 3025
+    username: ""
+    password: ""
+
+notify:
+  max-attempts: 2
+  retry-delay-seconds: 30
+  batch-size: 25
+  transport: simulated
+  from: test@etour.example.com
+  worker:
+    # Effectively disables the scheduled poll during tests, so the only thing
+    # dispatching is the test itself and assertions can never race the worker.
+    poll-interval-ms: 3600000
+
+security:
+  jwt:
+    secret: dGVzdC1zZWNyZXQtdGhhdC1pcy1kZWZpbml0ZWx5LWxvbmctZW5vdWdoLWZvci1oczI1Ng==
+  backend:
+    base-url: http://localhost:59999
+    cache-ttl-seconds: 60
+
+logging:
+  level:
+    com.etour.notification: WARN

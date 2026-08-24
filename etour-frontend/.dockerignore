@@ -1,0 +1,22 @@
+# Keep the build context small and the image clean.
+
+# Installed inside the image by `npm ci`. Copying the host's copy in would be
+# slow AND wrong - it may hold platform-specific native binaries (Windows
+# rollup/esbuild bindings will not run in the Linux build stage).
+node_modules/
+
+# Rebuilt by the image; a stale host build would be copied over the fresh one.
+dist/
+
+# Vite inlines env vars at build time, and the value is passed as a build ARG
+# by compose. A stray .env in the context would silently win.
+.env
+.env.*
+!.env.example
+
+npm-debug.log*
+.DS_Store
+Thumbs.db
+*.md
+Dockerfile
+.dockerignore

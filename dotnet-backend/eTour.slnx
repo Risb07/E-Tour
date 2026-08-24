@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/eTour.Api/eTour.Api.csproj" />
+    <Project Path="src/eTour.Application/eTour.Application.csproj" />
+    <Project Path="src/eTour.Domain/eTour.Domain.csproj" />
+    <Project Path="src/eTour.Infrastructure/eTour.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/eTour.Tests/eTour.Tests.csproj" />
+  </Folder>
+</Solution>

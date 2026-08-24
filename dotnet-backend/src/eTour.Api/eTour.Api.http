@@ -1,0 +1,6 @@
+@eTour.Api_HostAddress = http://localhost:5212
+
+GET {{eTour.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

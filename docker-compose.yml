@@ -1,0 +1,406 @@
+# =============================================================================
+# eTour - full stack
+#
+#   docker compose up --build
+#   →  http://localhost
+#
+# Three services: MySQL, the Spring Boot API, and nginx serving the React build
+# and proxying the API. Only nginx publishes a port, so the browser sees a
+# single origin and CORS never comes up.
+#
+# Every credential comes from .env (copy .env.example). Nothing secret lives in
+# this file.
+# =============================================================================
+
+services:
+
+  # ---------------------------------------------------------------------------
+  # MySQL 8
+  # ---------------------------------------------------------------------------
+  db:
+    image: mysql:8.0
+    container_name: etour-db
+    restart: unless-stopped
+
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpassword}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-etour}
+      MYSQL_USER: ${MYSQL_USER:-etour}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-etourpassword}
+
+      # Read by 20-grants.sh, which creates the notification service's database
+      # and user on this same server. MySQL itself ignores these; they are here
+      # only so the init script honours .env instead of falling back to its
+      # built-in defaults.
+      NOTIFY_DB_NAME: ${NOTIFY_DB_NAME:-etour_notify}
+      NOTIFY_DB_USERNAME: ${NOTIFY_DB_USERNAME:-notify}
+      NOTIFY_DB_PASSWORD: ${NOTIFY_DB_PASSWORD:-notifypassword}
+
+    # utf8mb4 to match the dump, which was taken from a utf8mb4 schema.
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+
+    volumes:
+      # Everything in this directory runs ONCE, on first start with an empty
+      # data volume, in alphabetical order. Re-running the seed later means
+      # `docker compose down -v` first.
+      #
+      # The dump begins with DROP DATABASE / CREATE DATABASE / USE `etour`,
+      # so it rebuilds the schema itself.
+      - ./db/${DB_SEED_FILE:-etour_20260804_165623.sql}:/docker-entrypoint-initdb.d/10-seed.sql:ro
+      # ...and because that DROP DATABASE runs after MySQL's entrypoint has
+      # already granted rights on the original database, this re-grants them.
+      # It also creates the notification service's database and user, which is
+      # why that service needs no bootstrap container of its own.
+      #
+      # ONE-TIME STEP ON AN EXISTING INSTALLATION: because this runs only on an
+      # empty volume, a database that predates it will not have the notify user.
+      # See "Its own database" in notification-service/README.md for the single
+      # command that adds it.
+      - ./docker/mysql/20-grants.sh:/docker-entrypoint-initdb.d/20-grants.sh:ro
+      - db_data:/var/lib/mysql
+
+    # The backend waits on this, so it must mean "ready for queries", not just
+    # "process running". -h127.0.0.1 forces TCP: on the unix socket, mysqladmin
+    # answers while the server is still initialising.
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-rootpassword}"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 40s
+
+    networks: [etour]
+
+    # Uncomment to reach the database from a GUI client on the host.
+    # ports:
+    #   - "3307:3306"
+
+  # ---------------------------------------------------------------------------
+  # Spring Boot API   -   docker compose --profile java up
+  #
+  # One of two interchangeable backends. Both listen on 8080 and both answer to
+  # the hostname "backend" on the compose network, so nginx and the built
+  # frontend bundle are identical either way. Only one runs at a time.
+  # ---------------------------------------------------------------------------
+  backend:
+    profiles: ["java"]
+    build:
+      context: ./Backend
+      dockerfile: Dockerfile
+    container_name: etour-backend
+    restart: unless-stopped
+
+    depends_on:
+      db:
+        condition: service_healthy
+
+    environment:
+      # "db" is this compose service, resolved by Docker's DNS. allowPublicKeyRetrieval
+      # is required because MySQL 8 defaults to caching_sha2_password.
+      DB_URL: jdbc:mysql://db:3306/${MYSQL_DATABASE:-etour}?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      DB_USERNAME: ${MYSQL_USER:-etour}
+      DB_PASSWORD: ${MYSQL_PASSWORD:-etourpassword}
+
+      # The dump already contains the schema, so 'update' just reconciles it
+      # with the entities. Use 'validate' once the schema is settled.
+      JPA_DDL_AUTO: ${JPA_DDL_AUTO:-update}
+      JPA_SHOW_SQL: ${JPA_SHOW_SQL:-false}
+
+      # Leave JWT_SECRET empty and every restart logs all users out.
+      JWT_SECRET: ${JWT_SECRET:-}
+      JWT_EXPIRATION_MS: ${JWT_EXPIRATION_MS:-86400000}
+
+      # Requests arrive via nginx, so the Host/scheme Tomcat sees are the
+      # proxy's. This makes Spring honour the X-Forwarded-* headers nginx sets,
+      # which is what lets the OAuth redirect-uri resolve to the public origin
+      # instead of http://backend:8080.
+      SERVER_FORWARD_HEADERS_STRATEGY: framework
+
+      # Same-origin through nginx means CORS is unused; kept for direct calls.
+      CORS_ALLOWED_ORIGINS: ${APP_PUBLIC_URL:-http://localhost}
+
+      # Google sign-in. Blank = feature off, app runs normally.
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GOOGLE_REDIRECT_URI: ${APP_PUBLIC_URL:-http://localhost}/login/oauth2/code/google
+      OAUTH2_FRONTEND_REDIRECT_URI: ${APP_PUBLIC_URL:-http://localhost}/oauth2/callback
+
+      # Absolute so it is independent of the working directory, and matching
+      # the volume below.
+      UPLOAD_DIR: /app/uploads
+
+      MAIL_HOST: ${MAIL_HOST:-smtp.gmail.com}
+      MAIL_PORT: ${MAIL_PORT:-587}
+      MAIL_USERNAME: ${MAIL_USERNAME:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      MAIL_FROM: ${MAIL_FROM:-noreply@etour.example.com}
+
+      INVOICE_GST_RATE: ${INVOICE_GST_RATE:-0.05}
+      PAYMENT_PROVIDER: ${PAYMENT_PROVIDER:-simulated}
+
+      # Receipt e-mail is QUEUED with the notification service, not sent from
+      # here - so the MAIL_* settings above are unused by this backend now. The
+      # service handles templates, the single retry and the delivery log.
+      # NOTIFICATION_ENABLED=false stops queueing entirely; nothing falls back
+      # to direct SMTP, because a fallback is how duplicate e-mails happen.
+      NOTIFICATION_BASE_URL: http://notification-service:8085
+      NOTIFICATION_ENABLED: ${NOTIFICATION_ENABLED:-true}
+
+      TZ: ${TZ:-UTC}
+
+    volumes:
+      # Bind mount: uploaded media stays a real folder in the project, readable
+      # from Windows and surviving `docker compose down`.
+      - ./uploads:/app/uploads
+
+    networks: [etour]
+
+    # Not published. nginx reaches it over the internal network. Uncomment to
+    # call the API directly, e.g. from Postman.
+    # ports:
+    #   - "8080:8080"
+
+  # ---------------------------------------------------------------------------
+  # ASP.NET Core API   -   docker compose --profile dotnet up
+  #
+  # The alternative backend. It shares this file's database, uploads volume and
+  # .env, and exposes the same wire contract, so switching profiles swaps the
+  # implementation with nothing else changing.
+  #
+  # The network alias below is what makes that work: nginx proxies to
+  # "backend:8080", and this service answers to that name when its profile is
+  # the active one.
+  # ---------------------------------------------------------------------------
+  backend-dotnet:
+    profiles: ["dotnet"]
+    build:
+      context: ./dotnet-backend
+      dockerfile: Dockerfile
+    container_name: etour-backend-dotnet
+    restart: unless-stopped
+
+    depends_on:
+      db:
+        condition: service_healthy
+
+    # ASP.NET Core maps a double underscore to a config-section separator, so
+    # ConnectionStrings__Default overrides ConnectionStrings:Default in
+    # appsettings.json. Every value comes from the SAME .env keys the Java
+    # backend uses - one file configures either backend.
+    environment:
+      ConnectionStrings__Default: "Server=db;Port=3306;Database=${MYSQL_DATABASE:-etour};User=${MYSQL_USER:-etour};Password=${MYSQL_PASSWORD:-etourpassword};AllowPublicKeyRetrieval=True;SslMode=None"
+
+      Jwt__Secret: ${JWT_SECRET:-}
+      Jwt__ExpirationMs: ${JWT_EXPIRATION_MS:-86400000}
+
+      Cors__AllowedOrigins: ${APP_PUBLIC_URL:-http://localhost}
+
+      # Same Google credentials as the Java backend, and the same callback path,
+      # so ONE Authorized redirect URI in the Google console serves both.
+      OAuth__Google__ClientId: ${GOOGLE_CLIENT_ID:-}
+      OAuth__Google__ClientSecret: ${GOOGLE_CLIENT_SECRET:-}
+      OAuth__Google__CallbackPath: /login/oauth2/code/google
+
+      # Java-compatible redirect: token as a query string to /oauth2/callback,
+      # which is the route the shipped frontend already has. Served by
+      # JavaCompatOAuthController.
+      OAuth__Compat__SuccessRedirectUrl: ${APP_PUBLIC_URL:-http://localhost}/oauth2/callback
+      OAuth__Compat__FailureRedirectUrl: ${APP_PUBLIC_URL:-http://localhost}/login
+
+      # The .NET-native flow stays available alongside it (fragment token to
+      # /oauth/callback). Unused by this frontend, but left wired so the
+      # backend's own README stays accurate.
+      OAuth__SuccessRedirectUrl: ${APP_PUBLIC_URL:-http://localhost}/oauth/callback
+      OAuth__FailureRedirectUrl: ${APP_PUBLIC_URL:-http://localhost}/login
+
+      # Absolute, matching the bind mount below. Program.cs combines this with
+      # the content root; an absolute path wins, which is what we want.
+      Upload__Directory: /app/uploads
+
+      Mail__Host: ${MAIL_HOST:-smtp.gmail.com}
+      Mail__Port: ${MAIL_PORT:-587}
+      Mail__Username: ${MAIL_USERNAME:-}
+      Mail__Password: ${MAIL_PASSWORD:-}
+      Mail__From: ${MAIL_FROM:-noreply@etour.example.com}
+
+      Invoice__GstRate: ${INVOICE_GST_RATE:-0.05}
+      Payment__Provider: ${PAYMENT_PROVIDER:-simulated}
+
+      # Same as the Java backend: receipt e-mail is queued with the notification
+      # service rather than sent from this process, so both profiles produce an
+      # identical e-mail for the same booking.
+      Notification__BaseUrl: http://notification-service:8085
+      Notification__Enabled: ${NOTIFICATION_ENABLED:-true}
+
+      # The demo-data seeder is idempotent - it only inserts what is missing.
+      # Safe against the restored dump, but set DOTNET_SEED_ENABLED=false to
+      # leave the database exactly as the dump left it.
+      Seed__Enabled: ${DOTNET_SEED_ENABLED:-true}
+
+      # Interop demo endpoint (/api/proxy/java-status). Points at the Java
+      # container, which is only running under the java profile - so this
+      # reports unreachable while the dotnet profile is active, as expected.
+      JavaMicroservice__BaseUrl: http://backend:8080
+
+      # Blank => the AI assistant endpoint returns 503 and nothing else changes.
+      Ai__ApiKey: ${AI_API_KEY:-}
+      Ai__Model: ${AI_MODEL:-gpt-4o-mini}
+
+      ASPNETCORE_ENVIRONMENT: ${DOTNET_ENVIRONMENT:-Production}
+      TZ: ${TZ:-UTC}
+
+    volumes:
+      # The same host folder the Java backend uses, so media uploaded under one
+      # backend is still served by the other.
+      - ./uploads:/app/uploads
+
+    networks:
+      etour:
+        aliases:
+          # This is the whole switching mechanism: nginx.conf proxies to
+          # "backend", and this container answers to that name.
+          - backend
+
+    # ports:
+    #   - "8080:8080"
+
+  # ---------------------------------------------------------------------------
+  # Notification service   -   always on, under BOTH profiles
+  #
+  # No `profiles:` key: it runs alongside whichever backend is active, rather
+  # than belonging to either. nginx does not depend on it being up - /svc/ is
+  # resolved per request, so this service can be stopped, rebuilt or crash
+  # without affecting the rest of the stack.
+  #
+  # It talks to a backend for exactly one thing - confirming a caller is an
+  # ADMIN, since eTour JWTs carry no role claim - and `backend` is the shared
+  # alias both backends answer to, so that works under either profile. Delivery
+  # does not depend on a backend being up.
+  # ---------------------------------------------------------------------------
+  notification-service:
+    build:
+      context: ./notification-service
+      dockerfile: Dockerfile
+    container_name: etour-notification-service
+    restart: unless-stopped
+
+    depends_on:
+      # Healthy means "answering queries", so the notify user and its database -
+      # created by 20-grants.sh during the db container's own initialisation -
+      # already exist by the time Hibernate opens a connection.
+      db:
+        condition: service_healthy
+
+    environment:
+      # Same MySQL server as the eTour backend, different database and different
+      # user - the notify user is granted rights on `etour_notify` only.
+      NOTIFY_DB_URL: jdbc:mysql://db:3306/${NOTIFY_DB_NAME:-etour_notify}?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      NOTIFY_DB_USERNAME: ${NOTIFY_DB_USERNAME:-notify}
+      NOTIFY_DB_PASSWORD: ${NOTIFY_DB_PASSWORD:-notifypassword}
+
+      # The SAME secret both backends sign with, so a token minted by either one
+      # verifies here with no coordination. Blank => this service rejects every
+      # authenticated call, which fails closed rather than open.
+      JWT_SECRET: ${JWT_SECRET:-}
+
+      # Where to confirm ADMIN. "backend" is the alias the active backend
+      # answers to, so this is correct under both profiles.
+      BACKEND_BASE_URL: http://backend:8080
+
+      # Initial send + exactly ONE retry, then the message is dead-lettered for
+      # an admin to look at. See notification-service/README.md for why.
+      NOTIFY_MAX_ATTEMPTS: ${NOTIFY_MAX_ATTEMPTS:-2}
+      NOTIFY_RETRY_DELAY_SECONDS: ${NOTIFY_RETRY_DELAY_SECONDS:-30}
+
+      # Blank => auto-detect: smtp when mail credentials exist, otherwise
+      # simulated (logged, not delivered) - the same way both backends degrade.
+      NOTIFY_TRANSPORT: ${NOTIFY_TRANSPORT:-}
+      MAIL_HOST: ${MAIL_HOST:-smtp.gmail.com}
+      MAIL_PORT: ${MAIL_PORT:-587}
+      MAIL_USERNAME: ${MAIL_USERNAME:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      MAIL_FROM: ${MAIL_FROM:-noreply@etour.example.com}
+
+      TZ: ${TZ:-UTC}
+
+    networks: [etour]
+
+    # Not published - nginx reaches it over the internal network at /svc/.
+    # Uncomment to call it directly, e.g. from Postman.
+    # ports:
+    #   - "8085:8085"
+
+  # ---------------------------------------------------------------------------
+  # nginx: React build + reverse proxy
+  # ---------------------------------------------------------------------------
+  frontend:
+    build:
+      context: ./etour-frontend
+      dockerfile: Dockerfile
+      args:
+        # Baked into the bundle at build time (Vite has no runtime env lookup),
+        # so changing APP_PUBLIC_URL requires `--build-arg` / a rebuild:
+        #   docker compose up --build frontend
+        VITE_API_BASE_URL: ${APP_PUBLIC_URL:-http://localhost}
+    container_name: etour-frontend
+    restart: unless-stopped
+
+    # nginx resolves its upstream hostname when it loads its config, so it must
+    # not start before whichever backend is active exists - otherwise it exits
+    # with "host not found in upstream backend".
+    #
+    # `required: false` is what makes one frontend definition serve both
+    # profiles: the backend that is not enabled is ignored instead of failing
+    # the run. Needs Compose v2.20+ (check with `docker compose version`).
+    depends_on:
+      db:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+        required: false
+      backend-dotnet:
+        condition: service_healthy
+        required: false
+      # required: false, deliberately. nginx resolves /svc/ per request rather
+      # than at config load (see the resolver comment in nginx.conf), so it
+      # starts fine without this service and /svc/ simply 502s until it is up.
+      # A hard dependency here would mean a broken notification service could
+      # stop nginx and take BOTH backends offline with it.
+      notification-service:
+        condition: service_healthy
+        required: false
+
+    ports:
+      - "${APP_PORT:-80}:80"
+      # nginx.conf terminates TLS for etourvita.shop, so 443 has to be
+      # published or nothing can reach the HTTPS server block.
+      - "${APP_TLS_PORT:-443}:443"
+
+    volumes:
+      # nginx.conf references /etc/letsencrypt/live/<domain>/ certificates. They
+      # live on the host (issued by certbot) and are mounted in read-only.
+      #
+      # CERTS_DIR must point at a directory that actually contains them, or
+      # nginx exits at startup with "cannot load certificate". On the EC2 host
+      # that is /etc/letsencrypt; see BACKEND_SWITCHING.md for how to run
+      # locally, where those certificates do not exist.
+      - ${CERTS_DIR:-/etc/letsencrypt}:/etc/letsencrypt:ro
+      # Webroot for certbot's HTTP-01 renewal challenge, matching the
+      # /.well-known/acme-challenge/ location in nginx.conf.
+      - ${CERTBOT_WEBROOT:-./docker/certbot}:/var/www/certbot
+
+    networks: [etour]
+
+volumes:
+  # One volume now holds both the `etour` and `etour_notify` databases. The
+  # trade-off of the single-server layout: `docker compose down -v` discards the
+  # notification queue along with the eTour data, and a backup covers both or
+  # neither.
+  db_data:
+    driver: local
+
+networks:
+  etour:
+    driver: bridge
